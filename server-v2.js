@@ -3,11 +3,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { Storage } from '@google-cloud/storage';
-
-const execAsync = promisify(exec);
+import pdfParse from 'pdf-parse';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -147,6 +144,49 @@ async function uploadToGCS(fileBuffer, characterName, categoryName, fileName) {
   return `https://storage.googleapis.com/${GCS_BUCKET}/${destinationPath}`;
 }
 
+// Extract structured lines from a PDF using pdf-parse (Node-only, no Python)
+async function extractLinesFromPdf(pdfPath) {
+  const dataBuffer = fs.readFileSync(pdfPath);
+  const data = await pdfParse(dataBuffer);
+  const fullText = data.text || '';
+
+  const responses = [];
+  let currentCategory = '';
+  let responseId = 1;
+
+  const lines = fullText.split('\n');
+
+  for (let rawLine of lines) {
+    let line = rawLine.replace(/^\s+\d+\|/, '').trim();
+    if (!line) continue;
+
+    // Category headers (mirrors the Python logic)
+    if (/^\d+\)\s+/.test(line) || line.includes('Dialogue Response Library') || line.includes('Response')) {
+      const match = line.match(/(?:—\s*)?([A-Z][^—\(]+?)(?:\s*\(|$)/);
+      if (match) {
+        let category = match[1].trim();
+        category = category.replace(/\s+\d+\s*$/, '');
+        category = category.replace(/^\d+\)\s*/, '');
+        category = category.replace('Dialogue Response Library', '').trim();
+        currentCategory = category;
+      }
+      continue;
+    }
+
+    // Skip meta lines (pure numbers, etc.) and require a current category
+    if (line.length > 3 && !/^[\d\.\)\s]+$/.test(line) && currentCategory) {
+      responses.push({
+        id: String(responseId).padStart(4, '0'),
+        category: currentCategory,
+        text: line,
+      });
+      responseId += 1;
+    }
+  }
+
+  return responses;
+}
+
 // Process a single job
 async function processJob(job) {
   const { jobId, pdfPath, voiceId, characterName, originalName } = job;
@@ -162,79 +202,8 @@ async function processJob(job) {
       fs.mkdirSync(outputFolder, { recursive: true });
     }
 
-    // Create temp directory
-    const tempDir = path.join(__dirname, 'temp');
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
-
-    // Step 1: Extract text from PDF
-    const extractScript = `
-import PyPDF2
-import json
-import re
-import sys
-
-pdf_path = "${pdfPath.replace(/\\/g, '\\\\')}"
-output_path = "${path.join(tempDir, `${characterName}_extracted.txt`).replace(/\\/g, '\\\\')}"
-json_path = "${path.join(tempDir, `${characterName}_lines.json`).replace(/\\/g, '\\\\')}"
-
-# Extract text
-with open(pdf_path, 'rb') as file:
-    pdf_reader = PyPDF2.PdfReader(file)
-    full_text = ""
-    for page in pdf_reader.pages:
-        full_text += page.extract_text() + "\\n"
-    
-    with open(output_path, 'w', encoding='utf-8') as out:
-        out.write(full_text)
-
-# Parse responses
-responses = []
-current_category = ""
-response_id = 1
-
-lines = full_text.split('\\n')
-for line in lines:
-    line = re.sub(r'^\\s+\\d+\\|', '', line).strip()
-    if not line:
-        continue
-    
-    # Category headers
-    if re.match(r'^\\d+\\)\\s+', line) or 'Dialogue Response Library' in line or 'Response' in line:
-        category_match = re.search(r'(?:—\\s*)?([A-Z][^—\\(]+?)(?:\\s*\\(|$)', line)
-        if category_match:
-            current_category = category_match.group(1).strip()
-            current_category = re.sub(r'\\s+\\d+\\s*$', '', current_category)
-            current_category = re.sub(r'^\\d+\\)\\s*', '', current_category)
-            current_category = current_category.replace('Dialogue Response Library', '').strip()
-        continue
-    
-    # Skip meta lines
-    if len(line) > 3 and not re.match(r'^[\\d\\.\\)\\s]+$', line) and current_category:
-        responses.append({
-            "id": f"{response_id:04d}",
-            "category": current_category,
-            "text": line
-        })
-        response_id += 1
-
-# Save to JSON
-with open(json_path, 'w', encoding='utf-8') as f:
-    json.dump(responses, f, indent=2, ensure_ascii=False)
-
-print(f"✅ Extracted {len(responses)} responses")
-`;
-
-    const scriptPath = path.join(tempDir, `extract_${jobId}.py`);
-    fs.writeFileSync(scriptPath, extractScript);
-
-    // Run Python extraction script (no virtualenv on Railway – use system Python)
-    await execAsync(`cd ${__dirname} && python3 ${scriptPath}`);
-
-    // Load extracted JSON
-    const jsonPath = path.join(tempDir, `${characterName}_lines.json`);
-    const extractedLines = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+    // Step 1: Extract text and responses from PDF using Node (no Python dependency)
+    const extractedLines = await extractLinesFromPdf(pdfPath);
 
     job.totalLines = extractedLines.length;
     job.status = 'generating';
@@ -291,8 +260,6 @@ print(f"✅ Extracted {len(responses)} responses")
 
     // Cleanup
     fs.unlinkSync(pdfPath);
-    fs.unlinkSync(scriptPath);
-    fs.unlinkSync(jsonPath);
 
     // Mark as complete
     job.status = 'completed';
