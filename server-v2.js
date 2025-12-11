@@ -4,7 +4,11 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Storage } from '@google-cloud/storage';
-import pdfParse from 'pdf-parse';
+import { createRequire } from 'module';
+
+// Use CommonJS require for pdf-parse to avoid its debug auto-run code in ESM
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
