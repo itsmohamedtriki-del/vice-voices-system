@@ -229,7 +229,8 @@ print(f"✅ Extracted {len(responses)} responses")
     const scriptPath = path.join(tempDir, `extract_${jobId}.py`);
     fs.writeFileSync(scriptPath, extractScript);
 
-    await execAsync(`cd ${__dirname} && source venv/bin/activate && python3 ${scriptPath}`);
+    // Run Python extraction script (no virtualenv on Railway – use system Python)
+    await execAsync(`cd ${__dirname} && python3 ${scriptPath}`);
 
     // Load extracted JSON
     const jsonPath = path.join(tempDir, `${characterName}_lines.json`);
@@ -443,6 +444,14 @@ app.post('/api/generate-batch', upload.array('pdfs', 10), async (req, res) => {
       });
 
       console.log(`📥 Queued: ${characterName} (${voiceId}) - ${file.originalname}`);
+    }
+
+    if (jobs.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'No jobs created. Make sure each PDF filename follows the format CharacterName_VoiceID.pdf, e.g. SlippinJimmy_eT3X4VCP0uNoyW4G4qHy.pdf',
+      });
     }
 
     res.json({
