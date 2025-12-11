@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Generator V2 - Batch Upload with Queue</title>
+    <title>Voice Generator - Upload</title>
     <style>
         * {
             margin: 0;
@@ -13,461 +13,273 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+            background: #f5f5f5;
+            padding: 24px;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 960px;
             margin: 0 auto;
         }
 
-        .header {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        .panel {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
         }
 
         h1 {
-            color: #333;
-            font-size: 32px;
-            margin-bottom: 10px;
+            font-size: 22px;
+            margin-bottom: 4px;
+            color: #222222;
         }
 
         .subtitle {
-            color: #666;
-            font-size: 16px;
+            font-size: 14px;
+            color: #555555;
+            margin-bottom: 0;
         }
 
-        .upload-section {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: #222222;
         }
 
-        .info-box {
-            background: #f0f4ff;
-            border-left: 4px solid #667eea;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+        p {
+            font-size: 14px;
+            color: #444444;
+            margin-bottom: 8px;
         }
 
-        .info-box h3 {
-            color: #667eea;
-            margin-bottom: 10px;
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 13px;
+            background: #f0f0f0;
+            padding: 2px 4px;
+            border-radius: 3px;
         }
 
-        .info-box code {
-            background: #e0e7ff;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-family: monospace;
+        ul {
+            margin-left: 18px;
+            margin-bottom: 8px;
         }
 
-        .example {
-            background: white;
-            padding: 10px;
-            border-radius: 6px;
-            font-family: monospace;
-            margin-top: 10px;
+        li {
+            font-size: 14px;
+            color: #444444;
+            margin-bottom: 4px;
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
 
         label {
             display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 600;
-        }
-
-        input[type="text"],
-        input[type="password"] {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
             font-size: 14px;
-            transition: border-color 0.3s;
+            font-weight: 500;
+            color: #333333;
+            margin-bottom: 4px;
         }
 
-        input[type="text"]:focus,
-        input[type="password"]:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .upload-area {
-            border: 3px dashed #ddd;
-            border-radius: 12px;
-            padding: 40px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            background: #fafafa;
-            margin-bottom: 20px;
-        }
-
-        .upload-area:hover {
-            border-color: #667eea;
-            background: #f0f4ff;
-        }
-
-        .upload-area.dragover {
-            border-color: #667eea;
-            background: #e0e7ff;
-            transform: scale(1.02);
-        }
-
-        .upload-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
-
-        #fileInput {
-            display: none;
+        input[type="file"] {
+            display: block;
+            width: 100%;
         }
 
         .file-list {
-            margin: 20px 0;
+            margin-top: 8px;
         }
 
         .file-item {
-            background: #f8f9fa;
-            padding: 12px;
-            border-radius: 8px;
+            font-size: 13px;
+            color: #333333;
+            padding: 4px 0;
+            border-bottom: 1px solid #eeeeee;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .actions {
+            margin-top: 12px;
+        }
+
+        button {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 14px;
+            border-radius: 3px;
+            border: 1px solid #1976d2;
+            background-color: #1976d2;
+            color: #ffffff;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        .queue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .file-name {
-            font-family: monospace;
-            color: #333;
-        }
-
-        .file-remove {
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 5px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
-        .file-remove:hover {
-            background: #c82333;
-        }
-
-        .upload-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 15px 40px;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            transition: transform 0.2s;
-        }
-
-        .upload-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-
-        .upload-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .jobs-section {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-        }
-
-        .jobs-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
         }
 
         .queue-info {
-            background: #f0f4ff;
-            padding: 10px 20px;
-            border-radius: 8px;
-            color: #667eea;
-            font-weight: 600;
+            font-size: 13px;
+            color: #555555;
         }
 
         .job-card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 15px;
-            border-left: 4px solid #ddd;
-        }
-
-        .job-card.queued {
-            border-left-color: #ffc107;
-        }
-
-        .job-card.extracting {
-            border-left-color: #17a2b8;
-        }
-
-        .job-card.generating {
-            border-left-color: #007bff;
-        }
-
-        .job-card.completed {
-            border-left-color: #28a745;
-        }
-
-        .job-card.failed {
-            border-left-color: #dc3545;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            background-color: #fafafa;
         }
 
         .job-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 6px;
         }
 
         .job-title {
+            font-size: 14px;
             font-weight: 600;
-            font-size: 18px;
-            color: #333;
+            color: #222222;
         }
 
         .job-status {
-            padding: 5px 15px;
-            border-radius: 20px;
             font-size: 12px;
-            font-weight: 600;
             text-transform: uppercase;
-        }
-
-        .status-queued {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .status-extracting,
-        .status-generating {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-
-        .status-completed {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-failed {
-            background: #f8d7da;
-            color: #721c24;
+            color: #555555;
         }
 
         .job-info {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 10px;
+            font-size: 13px;
+            color: #444444;
+            margin-bottom: 6px;
         }
 
         .progress-container {
-            background: #e9ecef;
-            border-radius: 10px;
-            height: 30px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            height: 16px;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }
 
         .progress-bar {
             height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.5s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 14px;
+            background: #1976d2;
+            color: #ffffff;
+            font-size: 11px;
+            text-align: center;
+            white-space: nowrap;
         }
 
         .job-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px;
-            margin-top: 10px;
-            font-size: 13px;
-            color: #666;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #555555;
         }
 
         .job-detail-item {
-            background: white;
-            padding: 8px 12px;
-            border-radius: 6px;
+            padding: 2px 4px;
+            background: #ffffff;
+            border-radius: 3px;
+            border: 1px solid #e0e0e0;
         }
 
         .job-detail-label {
-            font-weight: 600;
-            color: #333;
-        }
-
-        .gcs-link {
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .gcs-link:hover {
-            text-decoration: underline;
+            font-weight: 500;
         }
 
         .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #999;
+            font-size: 13px;
+            color: #777777;
+            padding: 8px 0;
         }
 
-        .empty-state-icon {
-            font-size: 64px;
-            margin-bottom: 10px;
+        a.gcs-link {
+            color: #1976d2;
+            text-decoration: none;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .processing {
-            animation: pulse 2s ease-in-out infinite;
+        a.gcs-link:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>🎤 Voice Generator V2</h1>
-            <p class="subtitle">Batch Upload System with Queue & Real-time Progress</p>
+        <div class="panel">
+            <h1>Voice Generator</h1>
+            <p class="subtitle">Upload one or more character PDF files. Each file will be processed in order and uploaded to cloud storage.</p>
         </div>
 
-        <!-- Upload Section -->
-        <div class="upload-section">
-            <div class="info-box">
-                <h3>📋 How to Use</h3>
-                <p><strong>1.</strong> Name your PDF files in this format: <code>CharacterName_VoiceID.pdf</code></p>
-                <div class="example">
-                    ✅ WalterWhite_abc123xyz.pdf<br>
-                    ✅ SaulGoodman_def456uvw.pdf<br>
-                    ✅ SlippinJimmy_eT3X4VCP0uNoyW4G4qHy.pdf
-                </div>
-                <p style="margin-top: 10px;"><strong>2.</strong> Upload multiple PDFs at once - they'll process one by one</p>
-                <p><strong>3.</strong> Watch real-time progress for each character</p>
-            </div>
+        <div class="panel">
+            <h2>Upload PDFs</h2>
+            <p>File name format: <code>CharacterName_VoiceID.pdf</code></p>
+            <ul>
+                <li>Example: <code>WalterWhite_abc123xyz.pdf</code></li>
+                <li>Example: <code>SaulGoodman_def456uvw.pdf</code></li>
+                <li>Example: <code>SlippinJimmy_eT3X4VCP0uNoyW4G4qHy.pdf</code></li>
+            </ul>
 
             <form id="uploadForm">
                 <div class="form-group">
-                    <label for="apiKey">🔑 ElevenLabs API Key</label>
-                    <input type="password" id="apiKey" placeholder="sk_..." required>
-                </div>
-
-                <div class="upload-area" id="uploadArea">
-                    <div class="upload-icon">📁</div>
-                    <h3>Click or drag multiple PDFs here</h3>
-                    <p style="color: #666; margin-top: 10px;">Support for up to 10 files at once</p>
+                    <label for="fileInput">PDF files</label>
                     <input type="file" id="fileInput" multiple accept=".pdf">
                 </div>
 
                 <div class="file-list" id="fileList"></div>
 
-                <button type="submit" class="upload-btn" id="uploadBtn" disabled>
-                    Upload & Generate
-                </button>
+                <div class="actions">
+                    <button type="submit" id="uploadBtn" disabled>Upload and Generate</button>
+                </div>
             </form>
         </div>
 
-        <!-- Jobs Section -->
-        <div class="jobs-section">
-            <div class="jobs-header">
-                <h2>📊 Processing Queue</h2>
-                <div class="queue-info" id="queueInfo">
-                    Queue: 0 | Active: 0
-                </div>
+        <div class="panel">
+            <div class="queue-header">
+                <h2>Processing Queue</h2>
+                <div class="queue-info" id="queueInfo">Queue: 0 | Active: 0</div>
             </div>
             <div id="jobsList">
-                <div class="empty-state">
-                    <div class="empty-state-icon">💤</div>
-                    <p>No jobs yet. Upload some PDFs to get started!</p>
-                </div>
+                <div class="empty-state">No jobs yet. Upload some PDFs to start processing.</div>
             </div>
         </div>
     </div>
 
     <script>
-        const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const fileList = document.getElementById('fileList');
         const uploadForm = document.getElementById('uploadForm');
         const uploadBtn = document.getElementById('uploadBtn');
-        const apiKeyInput = document.getElementById('apiKey');
         const jobsList = document.getElementById('jobsList');
         const queueInfo = document.getElementById('queueInfo');
 
         let selectedFiles = [];
         const activeConnections = new Map();
 
-        // Upload area interactions
-        uploadArea.addEventListener('click', () => fileInput.click());
-
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
-            addFiles(files);
-        });
-
         fileInput.addEventListener('change', (e) => {
-            addFiles(Array.from(e.target.files));
+            selectedFiles = Array.from(e.target.files).filter(f => f.type === 'application/pdf');
+            renderFileList();
+            uploadBtn.disabled = selectedFiles.length === 0;
         });
-
-        function addFiles(files) {
-            selectedFiles = [...selectedFiles, ...files].slice(0, 10);
-            renderFileList();
-            uploadBtn.disabled = selectedFiles.length === 0;
-        }
-
-        function removeFile(index) {
-            selectedFiles.splice(index, 1);
-            renderFileList();
-            uploadBtn.disabled = selectedFiles.length === 0;
-        }
 
         function renderFileList() {
             if (selectedFiles.length === 0) {
@@ -475,27 +287,15 @@
                 return;
             }
 
-            fileList.innerHTML = '<h4 style="margin-bottom: 10px;">Selected Files:</h4>' +
-                selectedFiles.map((file, index) => `
-                    <div class="file-item">
-                        <span class="file-name">📄 ${file.name}</span>
-                        <button type="button" class="file-remove" onclick="removeFile(${index})">Remove</button>
-                    </div>
-                `).join('');
+            const items = selectedFiles.map(file => `<div class="file-item">${file.name}</div>`).join('');
+            fileList.innerHTML = items;
         }
 
-        // Upload form submission
         uploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             if (selectedFiles.length === 0) {
                 alert('Please select at least one PDF file');
-                return;
-            }
-
-            const apiKey = apiKeyInput.value.trim();
-            if (!apiKey) {
-                alert('Please enter your ElevenLabs API key');
                 return;
             }
 
@@ -506,7 +306,6 @@
             selectedFiles.forEach(file => {
                 formData.append('pdfs', file);
             });
-            formData.append('apiKey', apiKey);
 
             try {
                 const response = await fetch('/api/generate-batch', {
@@ -517,31 +316,29 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    alert(`✅ ${result.jobs.length} job(s) added to queue!`);
-                    
-                    // Connect to progress streams for each job
+                    alert(result.jobs.length + ' job(s) added to queue.');
+
                     result.jobs.forEach(job => {
                         connectToProgress(job.jobId);
                     });
 
-                    // Reset form
                     selectedFiles = [];
+                    fileInput.value = '';
                     renderFileList();
                     uploadBtn.disabled = true;
-                    uploadBtn.textContent = 'Upload & Generate';
+                    uploadBtn.textContent = 'Upload and Generate';
                 } else {
-                    alert('❌ Error: ' + (result.error || 'Upload failed'));
+                    alert('Error: ' + (result.error || 'Upload failed'));
                     uploadBtn.disabled = false;
-                    uploadBtn.textContent = 'Upload & Generate';
+                    uploadBtn.textContent = 'Upload and Generate';
                 }
             } catch (error) {
-                alert('❌ Error: ' + error.message);
+                alert('Error: ' + error.message);
                 uploadBtn.disabled = false;
-                uploadBtn.textContent = 'Upload & Generate';
+                uploadBtn.textContent = 'Upload and Generate';
             }
         });
 
-        // Connect to SSE progress stream
         function connectToProgress(jobId) {
             const eventSource = new EventSource(`/api/progress/${jobId}`);
 
@@ -559,24 +356,20 @@
             activeConnections.set(jobId, eventSource);
         }
 
-        // Update job card UI
         function updateJobCard(job) {
             const existingCard = document.getElementById(`job-${job.jobId}`);
-            
+
             const cardHTML = `
-                <div class="job-card ${job.status}" id="job-${job.jobId}">
+                <div class="job-card" id="job-${job.jobId}">
                     <div class="job-header">
-                        <div class="job-title">🎤 ${job.characterName}</div>
-                        <div class="job-status status-${job.status}">${job.status}</div>
-                    </div>
-                    
-                    <div class="job-info">
-                        ${job.message}
+                        <div class="job-title">${job.characterName}</div>
+                        <div class="job-status">${job.status}</div>
                     </div>
 
+                    <div class="job-info">${job.message}</div>
+
                     <div class="progress-container">
-                        <div class="progress-bar ${job.status === 'generating' || job.status === 'extracting' ? 'processing' : ''}" 
-                             style="width: ${job.progress || 0}%">
+                        <div class="progress-bar" style="width: ${job.progress || 0}%">
                             ${job.progress || 0}%
                         </div>
                     </div>
@@ -584,40 +377,38 @@
                     <div class="job-details">
                         ${job.totalLines ? `
                             <div class="job-detail-item">
-                                <span class="job-detail-label">Total Lines:</span> ${job.totalLines}
+                                <span class="job-detail-label">Total lines:</span> ${job.totalLines}
                             </div>
                         ` : ''}
-                        
+
                         ${job.completed ? `
                             <div class="job-detail-item">
-                                <span class="job-detail-label">Completed:</span> ✅ ${job.completed}
+                                <span class="job-detail-label">Completed:</span> ${job.completed}
                             </div>
                         ` : ''}
-                        
+
                         ${job.failed > 0 ? `
                             <div class="job-detail-item">
-                                <span class="job-detail-label">Failed:</span> ❌ ${job.failed}
+                                <span class="job-detail-label">Failed:</span> ${job.failed}
                             </div>
                         ` : ''}
-                        
+
                         ${job.estimatedTimeRemaining ? `
                             <div class="job-detail-item">
-                                <span class="job-detail-label">Est. Time:</span> ~${Math.ceil(job.estimatedTimeRemaining / 60)} min
+                                <span class="job-detail-label">Est. time remaining:</span> ~${Math.ceil(job.estimatedTimeRemaining / 60)} min
                             </div>
                         ` : ''}
-                        
+
                         ${job.currentFile ? `
                             <div class="job-detail-item">
-                                <span class="job-detail-label">Current:</span> ${job.currentFile}
+                                <span class="job-detail-label">Current file:</span> ${job.currentFile}
                             </div>
                         ` : ''}
 
                         ${job.publicUrl ? `
-                            <div class="job-detail-item" style="grid-column: 1 / -1;">
-                                <span class="job-detail-label">Cloud Storage:</span> 
-                                <a href="${job.publicUrl}" target="_blank" class="gcs-link">
-                                    View Files in GCS ↗
-                                </a>
+                            <div class="job-detail-item">
+                                <span class="job-detail-label">Cloud folder:</span>
+                                <a href="${job.publicUrl}" target="_blank" class="gcs-link">Open in GCS</a>
                             </div>
                         ` : ''}
                     </div>
@@ -627,7 +418,6 @@
             if (existingCard) {
                 existingCard.outerHTML = cardHTML;
             } else {
-                // Remove empty state
                 const emptyState = jobsList.querySelector('.empty-state');
                 if (emptyState) {
                     emptyState.remove();
@@ -636,22 +426,21 @@
             }
         }
 
-        // Update queue info
         function updateQueueInfo() {
             fetch('/api/jobs')
                 .then(res => res.json())
                 .then(data => {
                     const active = data.jobs.filter(j => j.status === 'generating' || j.status === 'extracting').length;
                     queueInfo.textContent = `Queue: ${data.queueLength} | Active: ${active}`;
-                });
+                })
+                .catch(() => {});
         }
 
-        // Load existing jobs on page load
         async function loadExistingJobs() {
             try {
                 const response = await fetch('/api/jobs');
                 const data = await response.json();
-                
+
                 if (data.jobs.length > 0) {
                     data.jobs.forEach(job => {
                         updateJobCard(job);
@@ -660,17 +449,14 @@
                         }
                     });
                 }
-                
+
                 updateQueueInfo();
             } catch (error) {
                 console.error('Error loading jobs:', error);
             }
         }
 
-        // Load jobs when page loads
         loadExistingJobs();
-
-        // Refresh queue info every 5 seconds
         setInterval(updateQueueInfo, 5000);
     </script>
 </body>

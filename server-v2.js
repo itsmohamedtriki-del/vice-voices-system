@@ -18,6 +18,16 @@ const PORT = process.env.PORT || 3000;
 const storage = new Storage();
 const GCS_BUCKET = 'vice-voices';
 
+// ElevenLabs API key (configured on the server, not entered by users)
+const ELEVEN_API_KEY = process.env.ELEVEN_API_KEY;
+
+if (!ELEVEN_API_KEY) {
+  console.warn(
+    'Warning: ELEVEN_API_KEY environment variable is not set. ' +
+      'ElevenLabs requests will fail until this is configured.',
+  );
+}
+
 // Queue system
 const jobQueue = [];
 const activeJobs = new Map(); // jobId -> job status
@@ -139,7 +149,7 @@ async function uploadToGCS(fileBuffer, characterName, categoryName, fileName) {
 
 // Process a single job
 async function processJob(job) {
-  const { jobId, pdfPath, voiceId, characterName, apiKey, originalName } = job;
+  const { jobId, pdfPath, voiceId, characterName, originalName } = job;
   
   try {
     // Update job status
@@ -240,7 +250,7 @@ print(f"✅ Extracted {len(responses)} responses")
     for (const { id, category, text } of extractedLines) {
       try {
         // Generate audio
-        const audioBuffer = await generateAudioWithElevenLabs(voiceId, text, apiKey);
+        const audioBuffer = await generateAudioWithElevenLabs(voiceId, text);
         
         // Save locally
         const categoryFolder = ensureCategoryFolder(outputFolder, category);
@@ -308,7 +318,7 @@ print(f"✅ Extracted {len(responses)} responses")
 }
 
 // Generate audio with ElevenLabs
-async function generateAudioWithElevenLabs(voiceId, text, apiKey, retryCount = 0) {
+async function generateAudioWithElevenLabs(voiceId, text, retryCount = 0) {
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?optimize_streaming_latency=0`;
   const payload = {
     text,
@@ -320,7 +330,7 @@ async function generateAudioWithElevenLabs(voiceId, text, apiKey, retryCount = 0
     const response = await fetch(url, {
       method: "POST",
       headers: {
-        "xi-api-key": apiKey,
+        "xi-api-key": ELEVEN_API_KEY,
         "Content-Type": "application/json",
         "Accept": "audio/mpeg"
       },
@@ -335,7 +345,7 @@ async function generateAudioWithElevenLabs(voiceId, text, apiKey, retryCount = 0
   } catch (error) {
     if (retryCount < 3) {
       await new Promise(res => setTimeout(res, 2000 * (retryCount + 1)));
-      return generateAudioWithElevenLabs(voiceId, text, apiKey, retryCount + 1);
+      return generateAudioWithElevenLabs(voiceId, text, retryCount + 1);
     }
     throw error;
   }
@@ -380,9 +390,10 @@ app.post('/api/generate-batch', upload.array('pdfs', 10), async (req, res) => {
       return res.status(400).json({ error: 'No PDF files uploaded' });
     }
 
-    const { apiKey } = req.body;
-    if (!apiKey) {
-      return res.status(400).json({ error: 'ElevenLabs API key is required' });
+    if (!ELEVEN_API_KEY) {
+      return res.status(500).json({
+        error: 'Server ElevenLabs API key is not configured. Please set ELEVEN_API_KEY on the server.',
+      });
     }
 
     const jobs = [];
@@ -410,7 +421,6 @@ app.post('/api/generate-batch', upload.array('pdfs', 10), async (req, res) => {
         pdfPath: file.path,
         voiceId,
         characterName,
-        apiKey,
         originalName: file.originalname,
         status: 'queued',
         message: 'Waiting in queue...',
