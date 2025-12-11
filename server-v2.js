@@ -157,6 +157,8 @@ async function extractLinesFromPdf(pdfPath) {
   const responses = [];
   let currentCategory = '';
   let responseId = 1;
+  let dialogueStarted = false;  // Track when we've entered actual dialogue sections
+  let lastCharacterProfileLine = null;  // Hold the last Character Profile line
 
   const lines = fullText.split('\n');
 
@@ -166,19 +168,51 @@ async function extractLinesFromPdf(pdfPath) {
 
     // Category headers (mirrors the Python logic)
     if (/^\d+\)\s+/.test(line) || line.includes('Dialogue Response Library') || line.includes('Response')) {
+      // Before switching categories, if we're leaving Character Profile and have a saved line, add it
+      if (!dialogueStarted && lastCharacterProfileLine && currentCategory === 'Character Profile') {
+        responses.push(lastCharacterProfileLine);
+        responseId += 1;
+        lastCharacterProfileLine = null;
+      }
+      
       const match = line.match(/(?:—\s*)?([A-Z][^—\(]+?)(?:\s*\(|$)/);
       if (match) {
         let category = match[1].trim();
         category = category.replace(/\s+\d+\s*$/, '');
         category = category.replace(/^\d+\)\s*/, '');
         category = category.replace('Dialogue Response Library', '').trim();
-        currentCategory = category;
+        
+        // Mark dialogue as started when we see "Dialogue Response Library"
+        if (line.includes('Dialogue Response Library')) {
+          dialogueStarted = true;
+        }
+        
+        // Skip metadata-only categories entirely (and clear currentCategory so lines don't get added)
+        const isMetadataCategory = /^(Voice Creation Prompt|Metadata|Profile|Instructions|Guidelines|Notes|Description)$/i.test(category);
+        if (isMetadataCategory) {
+          currentCategory = '';  // Clear category so subsequent lines are skipped
+        } else {
+          currentCategory = category;
+        }
       }
       continue;
     }
 
-    // Skip meta lines (pure numbers, etc.) and require a current category
-    if (line.length > 3 && !/^[\d\.\)\s]+$/.test(line) && currentCategory) {
+    // Skip metadata fields (like "Name:", "Age:", "Role:", etc.)
+    const isMetadata = /^(Name|Age|Role|Background|Traits|Voice Creation Prompt|Tone|Style|Delivery|Pitch|Speed|Volume|Emphasis|Pacing):/i.test(line);
+    
+    // Handle Character Profile before dialogue differently: save only the last line
+    if (!dialogueStarted && currentCategory === 'Character Profile' && line.length > 3 && !/^[\d\.\)\s]+$/.test(line) && !isMetadata) {
+      lastCharacterProfileLine = {
+        id: String(responseId).padStart(4, '0'),
+        category: currentCategory,
+        text: line,
+      };
+      continue;  // Don't add yet, just save it
+    }
+    
+    // Skip meta lines (pure numbers, metadata labels, etc.) and require a current category
+    if (line.length > 3 && !/^[\d\.\)\s]+$/.test(line) && currentCategory && !isMetadata && dialogueStarted) {
       responses.push({
         id: String(responseId).padStart(4, '0'),
         category: currentCategory,
