@@ -406,19 +406,19 @@ app.post('/api/generate-batch', upload.array('pdfs', 10), async (req, res) => {
 
     // Create a job for each uploaded file
     for (const file of req.files) {
-      // Extract character name and voice ID from filename
-      // Expected format: CharacterName_VoiceID.pdf
+      // Extract voice ID and character name from filename
+      // Expected format: VoiceID_BP1A_CharacterName.pdf
       const fileBasename = path.basename(file.originalname, '.pdf');
       const parts = fileBasename.split('_');
       
-      if (parts.length < 2) {
+      if (parts.length < 3) {
         console.error(`❌ Invalid filename format: ${file.originalname}`);
-        console.error(`   Expected format: CharacterName_VoiceID.pdf`);
+        console.error(`   Expected format: VoiceID_BP1A_CharacterName.pdf`);
         continue;
       }
 
-      const characterName = parts.slice(0, -1).join('_');
-      const voiceId = parts[parts.length - 1];
+      const voiceId = parts[0];
+      const characterName = parts.slice(2).join('_'); // Everything after "BP1A"
 
       const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(7)}`;
       
@@ -455,7 +455,7 @@ app.post('/api/generate-batch', upload.array('pdfs', 10), async (req, res) => {
       return res.status(400).json({
         success: false,
         error:
-          'No jobs created. Make sure each PDF filename follows the format CharacterName_VoiceID.pdf, e.g. SlippinJimmy_eT3X4VCP0uNoyW4G4qHy.pdf',
+          'No jobs created. Make sure each PDF filename follows the format VoiceID_BP1A_CharacterName.pdf, e.g. eT3X4VCP0uNoyW4G4qHy_BP1A_SlippinJimmy.pdf',
       });
     }
 
