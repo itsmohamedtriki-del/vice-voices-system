@@ -16,8 +16,39 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Initialize Google Cloud Storage
-const storage = new Storage();
+let storage;
 const GCS_BUCKET = 'vice-voices';
+
+// Handle both file path (local) and JSON content (Railway) for GCS credentials
+try {
+  const gcpCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  
+  if (!gcpCredentials) {
+    console.warn('Warning: GOOGLE_APPLICATION_CREDENTIALS not set. GCS uploads will fail.');
+    storage = new Storage(); // Fallback
+  } else if (gcpCredentials.trim().startsWith('{')) {
+    // JSON content provided directly (Railway deployment)
+    const credentials = JSON.parse(gcpCredentials);
+    storage = new Storage({
+      projectId: credentials.project_id,
+      credentials: credentials
+    });
+    console.log('✅ GCS initialized with JSON credentials for project:', credentials.project_id);
+    
+    // IMPORTANT: Clear the env var to prevent other code from treating it as a file path
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  } else {
+    // File path provided (local development)
+    storage = new Storage({
+      keyFilename: gcpCredentials
+    });
+    console.log('✅ GCS initialized with key file:', gcpCredentials);
+  }
+} catch (error) {
+  console.error('❌ Error initializing GCS:', error.message);
+  console.error('Full error:', error);
+  storage = new Storage(); // Fallback
+}
 
 // ElevenLabs API key (configured on the server, not entered by users)
 const ELEVEN_API_KEY = process.env.ELEVEN_API_KEY;
