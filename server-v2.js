@@ -185,6 +185,11 @@ async function extractLinesFromPdf(pdfPath) {
   const data = await pdfParse(dataBuffer);
   const fullText = data.text || '';
 
+  console.log('\n📄 PDF Text Preview (first 1000 chars):');
+  console.log(fullText.substring(0, 1000));
+  console.log('\n📊 Total PDF text length:', fullText.length);
+  console.log('📊 Total lines:', fullText.split('\n').length);
+
   const responses = [];
   let currentCategory = '';
   let responseId = 1;
@@ -193,12 +198,18 @@ async function extractLinesFromPdf(pdfPath) {
 
   const lines = fullText.split('\n');
 
+  let categoryCount = 0;
+  let lineCount = 0;
+
   for (let rawLine of lines) {
     let line = rawLine.replace(/^\s+\d+\|/, '').trim();
     if (!line) continue;
 
-    // Category headers (mirrors the Python logic)
-    if (/^\d+\)\s+/.test(line) || line.includes('Dialogue Response Library') || line.includes('Response')) {
+    // Category headers - matches "1) ", "1A) ", "1B) ", etc.
+    if (/^\d+[A-Z]?\)\s+/.test(line) || line.includes('Dialogue Response Library') || line.includes('Response')) {
+      categoryCount++;
+      console.log(`📂 Found category header: "${line}"`);
+      lineCount = 0;
       // Before switching categories, if we're leaving Character Profile and have a saved line, add it
       if (!dialogueStarted && lastCharacterProfileLine && currentCategory === 'Character Profile') {
         responses.push(lastCharacterProfileLine);
@@ -210,16 +221,16 @@ async function extractLinesFromPdf(pdfPath) {
       if (match) {
         let category = match[1].trim();
         category = category.replace(/\s+\d+\s*$/, '');
-        category = category.replace(/^\d+\)\s*/, '');
+        category = category.replace(/^\d+[A-Z]?\)\s*/, ''); // Remove "1) " or "1A) " prefix
         category = category.replace('Dialogue Response Library', '').trim();
         
-        // Mark dialogue as started when we see "Dialogue Response Library"
-        if (line.includes('Dialogue Response Library')) {
+        // Mark dialogue as started when we see "Dialogue Response Library" OR any numbered section
+        if (line.includes('Dialogue Response Library') || /^\d+[A-Z]?\)\s+/.test(line)) {
           dialogueStarted = true;
         }
         
         // Skip metadata-only categories entirely (and clear currentCategory so lines don't get added)
-        const isMetadataCategory = /^(Voice Creation Prompt|Metadata|Profile|Instructions|Guidelines|Notes|Description)$/i.test(category);
+        const isMetadataCategory = /^(Voice Creation Prompt|Metadata|Profile|Instructions|Guidelines|Notes|Description|No Location Category)$/i.test(category);
         if (isMetadataCategory) {
           currentCategory = '';  // Clear category so subsequent lines are skipped
         } else {
@@ -244,6 +255,10 @@ async function extractLinesFromPdf(pdfPath) {
     
     // Skip meta lines (pure numbers, metadata labels, etc.) and require a current category
     if (line.length > 3 && !/^[\d\.\)\s]+$/.test(line) && currentCategory && !isMetadata && dialogueStarted) {
+      lineCount++;
+      if (lineCount <= 3) {
+        console.log(`  ✅ Adding line ${responseId} to "${currentCategory}": ${line.substring(0, 60)}...`);
+      }
       responses.push({
         id: String(responseId).padStart(4, '0'),
         category: currentCategory,
@@ -252,6 +267,11 @@ async function extractLinesFromPdf(pdfPath) {
       responseId += 1;
     }
   }
+
+  console.log(`\n📊 Extraction Summary:`);
+  console.log(`   - Categories found: ${categoryCount}`);
+  console.log(`   - Dialogue started: ${dialogueStarted}`);
+  console.log(`   - Total responses extracted: ${responses.length}`);
 
   return responses;
 }
