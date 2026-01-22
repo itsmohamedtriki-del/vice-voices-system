@@ -85,10 +85,13 @@ const upload = multer({
   storage: uploadStorage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB per file
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
+    // Accept both PDF and CSV files
+    if (file.mimetype === 'application/pdf' || 
+        file.mimetype === 'text/csv' || 
+        file.originalname.toLowerCase().endsWith('.csv')) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF files are allowed'));
+      cb(new Error('Only PDF and CSV files are allowed'));
     }
   }
 });
@@ -162,6 +165,19 @@ function sanitizeCategoryName(category) {
     .substring(0, 100);
 }
 
+// Helper: Sanitize transcript text for filename
+function sanitizeFilename(text) {
+  return text
+    .replace(/[/\\?%*:|"<>]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/[—–-]+/g, '-')
+    .replace(/[^\w\s-]/g, '') // Remove special chars except word chars, spaces, hyphens
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
+    .substring(0, 100) // Limit length
+    .trim();
+}
+
 // Helper: Upload to GCS
 async function uploadToGCS(fileBuffer, characterName, categoryName, fileName) {
   const sanitizedCharacterName = sanitizeCategoryName(characterName);
@@ -177,6 +193,96 @@ async function uploadToGCS(fileBuffer, characterName, categoryName, fileName) {
   });
   
   return `https://storage.googleapis.com/${GCS_BUCKET}/${destinationPath}`;
+}
+
+// Extract structured lines from a CSV file
+function extractLinesFromCsv(csvPath) {
+  const csvContent = fs.readFileSync(csvPath, 'utf-8');
+  const lines = csvContent.split('\n').filter(line => line.trim());
+  
+  if (lines.length < 2) {
+    console.error('❌ CSV file must have at least 2 rows (headers + descriptions)');
+    return [];
+  }
+
+  // Parse CSV manually (handling quoted fields with commas inside)
+  function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const nextChar = i + 1 < line.length ? line[i + 1] : '';
+      
+      if (char === '"') {
+        // Handle escaped quotes ("")
+        if (nextChar === '"' && inQuotes) {
+          current += '"';
+          i++; // Skip next quote
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  }
+
+  // Row 1: Category names (headers)
+  const categoryHeaders = parseCSVLine(lines[0]);
+  console.log(`\n📊 CSV Categories found: ${categoryHeaders.length}`);
+  console.log(`   Categories: ${categoryHeaders.slice(0, 5).join(', ')}${categoryHeaders.length > 5 ? '...' : ''}`);
+
+  // Row 2: Descriptions (skip)
+  // Row 3+: Responses
+  const responses = [];
+  let responseId = 1;
+
+  for (let rowIndex = 2; rowIndex < lines.length; rowIndex++) {
+    const row = parseCSVLine(lines[rowIndex]);
+    
+    // Process each column (category)
+    for (let colIndex = 0; colIndex < categoryHeaders.length && colIndex < row.length; colIndex++) {
+      const category = categoryHeaders[colIndex].trim();
+      const text = row[colIndex].trim();
+      
+      // Skip empty cells
+      if (!category || !text || text === '' || text.trim() === '') {
+        continue;
+      }
+      
+      // Skip description row if it somehow appears again
+      if (text.toLowerCase().includes('description of category') || 
+          text.toLowerCase().includes('example')) {
+        continue;
+      }
+      
+      // Remove quotes if present
+      const cleanText = text.replace(/^["']|["']$/g, '').trim();
+      if (!cleanText) {
+        continue;
+      }
+      
+      responses.push({
+        id: String(responseId).padStart(4, '0'),
+        category: category,
+        text: cleanText,
+      });
+      responseId += 1;
+    }
+  }
+
+  console.log(`\n📊 CSV Extraction Summary:`);
+  console.log(`   - Categories: ${categoryHeaders.length}`);
+  console.log(`   - Total responses extracted: ${responses.length}`);
+
+  return responses;
 }
 
 // Extract structured lines from a PDF using pdf-parse (Node-only, no Python)
@@ -291,8 +397,17 @@ async function processJob(job) {
       fs.mkdirSync(outputFolder, { recursive: true });
     }
 
-    // Step 1: Extract text and responses from PDF using Node (no Python dependency)
-    const extractedLines = await extractLinesFromPdf(pdfPath);
+    // Step 1: Extract text and responses from file (PDF or CSV)
+    const fileExt = path.extname(pdfPath).toLowerCase();
+    let extractedLines;
+    
+    if (fileExt === '.csv') {
+      console.log(`\n📄 Processing CSV file: ${originalName}`);
+      extractedLines = extractLinesFromCsv(pdfPath);
+    } else {
+      console.log(`\n📄 Processing PDF file: ${originalName}`);
+      extractedLines = await extractLinesFromPdf(pdfPath);
+    }
 
     job.totalLines = extractedLines.length;
     job.status = 'generating';
@@ -311,13 +426,21 @@ async function processJob(job) {
         // Generate audio
         const audioBuffer = await generateAudioWithElevenLabs(voiceId, text);
         
+        // Create filename from transcript text + category
+        const sanitizedText = sanitizeFilename(text);
+        const sanitizedCategory = sanitizeCategoryName(category);
+        const fileName = `${sanitizedCategory}_${sanitizedText}.mp3`;
+        
+        // Fallback to ID if filename is too short or empty
+        const finalFileName = fileName.length > 10 ? fileName : `${id}.mp3`;
+        
         // Save locally
         const categoryFolder = ensureCategoryFolder(outputFolder, category);
-        const filePath = path.join(categoryFolder, `${id}.mp3`);
+        const filePath = path.join(categoryFolder, finalFileName);
         fs.writeFileSync(filePath, audioBuffer);
         
         // Upload to GCS
-        const gcsUrl = await uploadToGCS(audioBuffer, characterName, category, `${id}.mp3`);
+        const gcsUrl = await uploadToGCS(audioBuffer, characterName, category, finalFileName);
         
         completed++;
         
@@ -330,12 +453,14 @@ async function processJob(job) {
         job.progress = progress;
         job.completed = completed;
         job.failed = failed;
-        job.currentFile = `${id}.mp3`;
+        job.currentFile = finalFileName;
         job.currentCategory = category;
         job.message = `Processing ${id} (${category})...`;
         job.estimatedTimeRemaining = Math.ceil(remaining);
         
         console.log(`✅ [${jobId}] [${completed}/${extractedLines.length}] ${progress}% | ${id} | ${category}`);
+        console.log(`   📝 "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}"`);
+        console.log(`   💾 ${finalFileName}`);
         
         // Rate limiting
         await new Promise(res => setTimeout(res, 500));
@@ -444,7 +569,7 @@ async function processQueue() {
 app.post('/api/generate-batch', upload.array('pdfs', 10), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ error: 'No PDF files uploaded' });
+      return res.status(400).json({ error: 'No files uploaded' });
     }
 
     if (!ELEVEN_API_KEY) {
@@ -458,13 +583,14 @@ app.post('/api/generate-batch', upload.array('pdfs', 10), async (req, res) => {
     // Create a job for each uploaded file
     for (const file of req.files) {
       // Extract voice ID and character name from filename
-      // Expected format: VoiceID_BP1A_CharacterName.pdf
-      const fileBasename = path.basename(file.originalname, '.pdf');
+      // Expected format: VoiceID_BP1A_CharacterName.pdf or VoiceID_BP1A_CharacterName.csv
+      const fileExt = path.extname(file.originalname).toLowerCase();
+      const fileBasename = path.basename(file.originalname, fileExt);
       const parts = fileBasename.split('_');
       
       if (parts.length < 3) {
         console.error(`❌ Invalid filename format: ${file.originalname}`);
-        console.error(`   Expected format: VoiceID_BP1A_CharacterName.pdf`);
+        console.error(`   Expected format: VoiceID_BP1A_CharacterName.pdf or VoiceID_BP1A_CharacterName.csv`);
         continue;
       }
 
@@ -502,13 +628,13 @@ app.post('/api/generate-batch', upload.array('pdfs', 10), async (req, res) => {
       console.log(`📥 Queued: ${characterName} (${voiceId}) - ${file.originalname}`);
     }
 
-    if (jobs.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error:
-          'No jobs created. Make sure each PDF filename follows the format VoiceID_BP1A_CharacterName.pdf, e.g. eT3X4VCP0uNoyW4G4qHy_BP1A_SlippinJimmy.pdf',
-      });
-    }
+      if (jobs.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'No jobs created. Make sure each file filename follows the format VoiceID_BP1A_CharacterName.pdf or VoiceID_BP1A_CharacterName.csv, e.g. eT3X4VCP0uNoyW4G4qHy_BP1A_SlippinJimmy.pdf',
+        });
+      }
 
     res.json({
       success: true,
