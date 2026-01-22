@@ -227,22 +227,22 @@
     <div class="container">
         <div class="panel">
             <h1>Voice Generator</h1>
-            <p class="subtitle">Upload one or more character PDF files. Each file will be processed in order and uploaded to cloud storage.</p>
+            <p class="subtitle">Upload one or more character PDF or CSV files. Each file will be processed in order and uploaded to cloud storage.</p>
         </div>
 
         <div class="panel">
-            <h2>Upload PDFs</h2>
-            <p>File name format: <code>VoiceID_BP1A_CharacterName.pdf</code></p>
+            <h2>Upload Files</h2>
+            <p>File name format: <code>VoiceID_BP1A_CharacterName.pdf</code> or <code>VoiceID_BP1A_CharacterName.csv</code></p>
             <ul>
-                <li>Example: <code>abc123xyz_BP1A_WalterWhite.pdf</code></li>
-                <li>Example: <code>def456uvw_BP1A_SaulGoodman.pdf</code></li>
-                <li>Example: <code>eT3X4VCP0uNoyW4G4qHy_BP1A_SlippinJimmy.pdf</code></li>
+                <li>PDF Example: <code>eT3X4VCP0uNoyW4G4qHy_BP1A_SlippinJimmy.pdf</code></li>
+                <li>CSV Example: <code>U9ALzDxAsDpaoIsqhTDy_BP1A_DeandreCarter.csv</code></li>
+                <li>CSV Format: Row 1 = Categories, Row 2 = Descriptions (skipped), Row 3+ = Responses</li>
             </ul>
 
             <form id="uploadForm">
                 <div class="form-group">
-                    <label for="fileInput">PDF files</label>
-                    <input type="file" id="fileInput" multiple accept=".pdf">
+                    <label for="fileInput">PDF or CSV files</label>
+                    <input type="file" id="fileInput" multiple accept=".pdf,.csv">
                 </div>
 
                 <div class="file-list" id="fileList"></div>
@@ -276,7 +276,11 @@
         const activeConnections = new Map();
 
         fileInput.addEventListener('change', (e) => {
-            selectedFiles = Array.from(e.target.files).filter(f => f.type === 'application/pdf');
+            selectedFiles = Array.from(e.target.files).filter(f => {
+                const isPdf = f.type === 'application/pdf';
+                const isCsv = f.type === 'text/csv' || f.name.toLowerCase().endsWith('.csv');
+                return isPdf || isCsv;
+            });
             renderFileList();
             uploadBtn.disabled = selectedFiles.length === 0;
         });
@@ -295,7 +299,7 @@
             e.preventDefault();
 
             if (selectedFiles.length === 0) {
-                alert('Please select at least one PDF file');
+                alert('Please select at least one PDF or CSV file');
                 return;
             }
 
