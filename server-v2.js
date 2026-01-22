@@ -234,21 +234,31 @@ function extractLinesFromCsv(csvPath) {
     return result;
   }
 
-  // Row 1: Category names (headers)
+  // Row 1 (index 0): Category names (headers)
   const categoryHeaders = parseCSVLine(lines[0]);
-  console.log(`\n📊 CSV Categories found: ${categoryHeaders.length}`);
-  console.log(`   Categories: ${categoryHeaders.slice(0, 5).join(', ')}${categoryHeaders.length > 5 ? '...' : ''}`);
+  console.log(`\n📊 CSV Row 1 (Categories): ${categoryHeaders.length} columns found`);
+  console.log(`   Column 0 (Categories): SKIPPED - contains row labels`);
+  console.log(`   Processing columns 1-${categoryHeaders.length - 1}: ${categoryHeaders.slice(1, 6).join(', ')}${categoryHeaders.length > 6 ? '...' : ''}`);
 
-  // Row 2: Descriptions (skip)
-  // Row 3+: Responses
+  // Row 2 (index 1): Descriptions - SKIP THIS ROW
+  if (lines.length > 1) {
+    const descriptions = parseCSVLine(lines[1]);
+    console.log(`📝 CSV Row 2 (Descriptions): Skipping ${descriptions.length} description cells`);
+  }
+
+  // Row 3+ (index 2+): Responses - START PROCESSING FROM HERE
+  // Column 0: SKIP (contains "Example 1", "Example 2", etc.)
+  // Column 1+: Process (actual category responses)
   const responses = [];
   let responseId = 1;
 
+  console.log(`\n📄 Processing data rows starting from row 3 (index 2)...`);
+  console.log(`   ⚠️  Column 0 will be skipped (contains row labels)`);
   for (let rowIndex = 2; rowIndex < lines.length; rowIndex++) {
     const row = parseCSVLine(lines[rowIndex]);
     
-    // Process each column (category)
-    for (let colIndex = 0; colIndex < categoryHeaders.length && colIndex < row.length; colIndex++) {
+    // Process each column (category) - SKIP COLUMN 0 (start from index 1)
+    for (let colIndex = 1; colIndex < categoryHeaders.length && colIndex < row.length; colIndex++) {
       const category = categoryHeaders[colIndex].trim();
       const text = row[colIndex].trim();
       
@@ -279,7 +289,11 @@ function extractLinesFromCsv(csvPath) {
   }
 
   console.log(`\n📊 CSV Extraction Summary:`);
-  console.log(`   - Categories: ${categoryHeaders.length}`);
+  console.log(`   - Row 1 (Categories): ${categoryHeaders.length} columns`);
+  console.log(`   - Column 0: SKIPPED ✓ (row labels)`);
+  console.log(`   - Columns 1-${categoryHeaders.length - 1}: Processed ✓`);
+  console.log(`   - Row 2 (Descriptions): SKIPPED ✓`);
+  console.log(`   - Row 3+ (Data): ${lines.length - 2} rows processed`);
   console.log(`   - Total responses extracted: ${responses.length}`);
 
   return responses;
